@@ -40,7 +40,8 @@
                         <div class="mb-3">
                             <label for="dominio" class="form-label">Domínio da Empresa</label>
                             <input type="text" class="form-control" id="dominio" 
-                                   placeholder="ex: empresa.com" required>
+                                   placeholder="ex: empresa.com (deixe vazio para admin)">
+                            <small class="text-muted">Para admin master, deixe em branco</small>
                         </div>
                         
                         <div class="mb-3">
@@ -58,6 +59,12 @@
                         <button type="submit" class="btn btn-primary w-100 mb-3">
                             Entrar
                         </button>
+                        
+                        <div class="text-center">
+                            <small class="text-muted">
+                                Admin master: usuário: <strong>admin</strong>, senha: <strong>admin</strong>
+                            </small>
+                        </div>
                     </form>
                     
                     <div id="loginError" class="alert alert-danger mt-3 d-none"></div>
@@ -87,15 +94,15 @@
                     })
                 });
                 
+                const data = await response.json();
+                
                 if (response.ok) {
-                    const data = await response.json();
                     localStorage.setItem('token', data.access_token);
                     localStorage.setItem('refresh_token', data.refresh_token);
                     window.location.href = '/dashboard.html';
                 } else {
-                    const error = await response.json();
                     document.getElementById('loginError').textContent = 
-                        error.detail || 'Erro ao fazer login';
+                        data.error || 'Erro ao fazer login';
                     document.getElementById('loginError').classList.remove('d-none');
                 }
             } catch (error) {
