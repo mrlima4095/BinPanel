@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BinPanel - Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        .sidebar {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .sidebar .nav-link {
+            color: rgba(255,255,255,0.8);
+        }
+        .sidebar .nav-link:hover {
+            color: white;
+            background: rgba(255,255,255,0.1);
+        }
+        .sidebar .nav-link.active {
+            color: white;
+            background: rgba(255,255,255,0.2);
+        }
+        .logo {
+            font-size: 1.8rem;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-3 col-lg-2 sidebar p-0">
+                <div class="p-4">
+                    <div class="logo">BinPanel</div>
+                    <div class="text-muted small mt-2">Painel de Controle</div>
+                </div>
+                
+                <ul class="nav flex-column">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="#">
+                            <i class="bi bi-speedometer2 me-2"></i>
+                            Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="empresas.html">
+                            <i class="bi bi-building me-2"></i>
+                            Empresas
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="usuarios.html">
+                            <i class="bi bi-people me-2"></i>
+                            Usuários
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="emails.html">
+                            <i class="bi bi-envelope me-2"></i>
+                            Emails
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="config.html">
+                            <i class="bi bi-gear me-2"></i>
+                            Configurações
+                        </a>
+                    </li>
+                    <li class="nav-item mt-4">
+                        <a class="nav-link text-danger" href="#" id="logout">
+                            <i class="bi bi-box-arrow-right me-2"></i>
+                            Sair
+                        </a>
+                    </li>
+                </ul>
+            </div>
+            
+            <!-- Main Content -->
+            <div class="col-md-9 col-lg-10 ms-auto p-4">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2>Dashboard</h2>
+                    <div class="d-flex align-items-center">
+                        <span id="userInfo" class="me-3"></span>
+                        <div class="dropdown">
+                            <button class="btn btn-outline-secondary dropdown-toggle" 
+                                    type="button" data-bs-toggle="dropdown">
+                                <i class="bi bi-person-circle"></i>
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" href="#"><i class="bi bi-person me-2"></i>Perfil</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item text-danger" href="#" id="logoutDropdown">
+                                    <i class="bi bi-box-arrow-right me-2"></i>Sair
+                                </a></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Cards de Estatísticas -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="card bg-primary text-white">
+                            <div class="card-body">
+                                <h5 class="card-title">Empresas</h5>
+                                <h2 id="empresasCount" class="card-text">0</h2>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-success text-white">
+                            <div class="card-body">
+                                <h5 class="card-title">Usuários</h5>
+                                <h2 id="usuariosCount" class="card-text">0</h2>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-warning text-white">
+                            <div class="card-body">
+                                <h5 class="card-title">Emails Hoje</h5>
+                                <h2 id="emailsCount" class="card-text">0</h2>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-info text-white">
+                            <div class="card-body">
+                                <h5 class="card-title">Serviços</h5>
+                                <h2 class="card-text">4/4</h2>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Tabela de Atividades Recentes -->
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Atividades Recentes</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Usuário</th>
+                                        <th>Ação</th>
+                                        <th>IP</th>
+                                        <th>Data/Hora</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="logsTable">
+                                    <!-- Logs serão carregados aqui -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Função para fazer requisições autenticadas
+        async function fetchWithAuth(url, options = {}) {
+            const token = localStorage.getItem('token');
+            
+            if (!token) {
+                window.location.href = '/login.html';
+                return;
+            }
+            
+            options.headers = {
+                ...options.headers,
+                'Authorization': `Bearer ${token}`
+            };
+            
+            let response = await fetch(url, options);
+            
+            // Se token expirou, tentar refresh
+            if (response.status === 401) {
+                const refreshToken = localStorage.getItem('refresh_token');
+                if (refreshToken) {
+                    const refreshResponse = await fetch('/api/auth/refresh', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ refresh_token: refreshToken })
+                    });
+                    
+                    if (refreshResponse.ok) {
+                        const newTokens = await refreshResponse.json();
+                        localStorage.setItem('token', newTokens.access_token);
+                        localStorage.setItem('refresh_token', newTokens.refresh_token);
+                        
+                        // Re-tentar a requisição original
+                        options.headers['Authorization'] = `Bearer ${newTokens.access_token}`;
+                        response = await fetch(url, options);
+                    } else {
+                        // Refresh falhou, fazer logout
+                        localStorage.clear();
+                        window.location.href = '/login.html';
+                        return;
+                    }
+                } else {
+                    localStorage.clear();
+                    window.location.href = '/login.html';
+                    return;
+                }
+            }
+            
+            return response;
+        }
+        
+        // Carregar dados do dashboard
+        async function loadDashboard() {
+            try {
+                // Carregar informações do usuário
+                const userResponse = await fetchWithAuth('/api/auth/me');
+                if (userResponse.ok) {
+                    const user = await userResponse.json();
+                    document.getElementById('userInfo').textContent = 
+                        `${user.username} (Nível ${user.hierarquia})`;
+                }
+                
+                // Carregar estatísticas
+                const empresasResponse = await fetchWithAuth('/api/empresas');
+                if (empresasResponse.ok) {
+                    const empresas = await empresasResponse.json();
+                    document.getElementById('empresasCount').textContent = empresas.length;
+                }
+                
+                // Carregar logs
+                const logsResponse = await fetchWithAuth('/api/logs?limit=10');
+                if (logsResponse.ok) {
+                    const logs = await logsResponse.json();
+                    const logsTable = document.getElementById('logsTable');
+                    logsTable.innerHTML = '';
+                    
+                    logs.forEach(log => {
+                        const row = `
+                            <tr>
+                                <td>${log.usuario_nome}</td>
+                                <td>${log.acao}</td>
+                                <td>${log.ip || 'N/A'}</td>
+                                <td>${new Date(log.criado_em).toLocaleString()}</td>
+                            </tr>
+                        `;
+                        logsTable.innerHTML += row;
+                    });
+                }
+                
+            } catch (error) {
+                console.error('Erro ao carregar dashboard:', error);
+            }
+        }
+        
+        // Função de logout
+        function logout() {
+            localStorage.clear();
+            window.location.href = '/login.html';
+        }
+        
+        // Event Listeners
+        document.getElementById('logout').addEventListener('click', logout);
+        document.getElementById('logoutDropdown').addEventListener('click', logout);
+        
+        // Carregar dados quando a página carregar
+        document.addEventListener('DOMContentLoaded', loadDashboard);
+    </script>
+</body>
+</html>
