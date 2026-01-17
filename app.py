@@ -24,11 +24,15 @@ def login():
     if not username or not password:
         return jsonify({'error': 'Usuário e senha são obrigatórios'}), 400
     
+    print(f"Tentativa de login: username={username}, password={'*' * len(password)}")
+    
     auth_result = Auth.authenticate(username, password)
     
     if auth_result:
+        print(f"Login bem-sucedido para: {username}")
         return jsonify(auth_result)
     
+    print(f"Falha no login para: {username}")
     return jsonify({'error': 'Credenciais inválidas'}), 401
 
 @app.route('/api/refresh', methods=['POST'])
@@ -157,6 +161,27 @@ def emails_page():
 @jwt_required()
 def settings_page():
     return render_template('settings.html')
+
+@app.route('/api/debug/users', methods=['GET'])
+def debug_users():
+    """Rota de debug para ver usuários (remover em produção)"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT id, username, email, password_hash FROM users')
+    users = cursor.fetchall()
+    conn.close()
+    
+    result = []
+    for user in users:
+        result.append({
+            'id': user['id'],
+            'username': user['username'],
+            'email': user['email'],
+            'password_hash': str(user['password_hash'])[:50] + '...'
+        })
+    
+    return jsonify(result)
 
 if __name__ == '__main__':
     app.run(debug=True, port=8080)

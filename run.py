@@ -4,7 +4,6 @@ import sys
 import time
 import threading
 import asyncio
-from email_handler import start_email_server_async
 import logging
 
 # Configurar logging
@@ -24,45 +23,21 @@ def run_flask():
 def run_email_server():
     """Executa servidor de email em uma thread separada"""
     try:
-        # Criar um loop de evento para esta thread
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        
-        from email_handler import EmailHandler
-        from aiosmtpd.controller import Controller
-        
-        handler = EmailHandler()
-        controller = Controller(handler, hostname='0.0.0.0', port=25)
-        
-        controller.start()
-        logger.info("✅ Servidor de email iniciado na porta 25")
-        
-        # Manter a thread viva
-        try:
-            loop.run_forever()
-        except KeyboardInterrupt:
-            pass
-        finally:
-            controller.stop()
-            loop.close()
-            
+        # Importar aqui para evitar problemas de importação circular
+        from email_handler import start_email_server
+        start_email_server()
     except Exception as e:
         logger.error(f"Erro no servidor de email: {str(e)}")
 
-def check_prerequisites():
-    """Verifica pré-requisitos"""
+def check_port_25():
+    """Verifica se podemos acessar a porta 25"""
     import socket
-    
-    # Verificar se a porta 25 está disponível
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         sock.bind(('0.0.0.0', 25))
         sock.close()
-        logger.info("✅ Porta 25 disponível")
         return True
-    except OSError as e:
-        logger.error(f"❌ Porta 25 não disponível: {e}")
-        logger.error("Execute como root ou configure permissões")
+    except OSError:
         return False
 
 def main():
@@ -71,17 +46,21 @@ def main():
     print("🚀 Iniciando Painel de Controle do Servidor")
     print("=" * 60)
     
-    # Verificar pré-requisitos
-    if not check_prerequisites():
+    # Verificar porta 25
+    if not check_port_25():
+        logger.error("❌ Porta 25 não disponível. Execute como root ou configure permissões.")
+        logger.error("   sudo setcap 'cap_net_bind_service=+ep' $(which python3)")
         return
+    
+    logger.info("✅ Porta 25 disponível")
     
     # Iniciar servidor de email em thread separada
     logger.info("📧 Iniciando servidor de email...")
     email_thread = threading.Thread(target=run_email_server, daemon=True, name="EmailServer")
     email_thread.start()
     
-    # Aguardar inicialização do servidor de email
-    time.sleep(2)
+    # Aguardar inicialização
+    time.sleep(3)
     
     # Iniciar servidor Flask
     logger.info("🌐 Iniciando painel web...")

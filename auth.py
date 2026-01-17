@@ -3,57 +3,98 @@ from flask_jwt_extended import create_access_token, create_refresh_token, jwt_re
 import bcrypt
 from database import get_db_connection
 from datetime import datetime
+import re
 
 class Auth:
     @staticmethod
     def authenticate(username, password):
+        """
+        Autentica usuário.
+        username pode ser: usuario@dominio.com ou apenas usuario
+        """
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        cursor.execute('''
+        # Extrair username e domínio se fornecido no formato usuario@dominio
+        username_only = username
+        domain_part = None
+        
+        if '@' in username:
+            parts = username.split('@')
+            if len(parts) == 2:
+                username_only = parts[0]
+                domain_part = parts[1].lower()
+        
+        # Construir query base
+        query = '''
         SELECT u.*, d.domain_name, c.name as company_name 
         FROM users u 
         LEFT JOIN domains d ON u.domain_id = d.id 
         LEFT JOIN companies c ON u.company_id = c.id 
         WHERE u.username = ? AND u.status = 'active'
-        ''', (username,))
+        '''
+        params = [username_only]
         
+        # Adicionar filtro de domínio se fornecido
+        if domain_part:
+            query += ' AND d.domain_name = ?'
+            params.append(domain_part)
+        
+        cursor.execute(query, tuple(params))
         user = cursor.fetchone()
         conn.close()
         
-        if user and bcrypt.checkpw(password.encode('utf-8'), user['password_hash']):
-            # Atualizar último login
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute('UPDATE users SET last_login = ? WHERE id = ?', 
-                         (datetime.now(), user['id']))
-            conn.commit()
-            conn.close()
+        if user:
+            logger.info(f"Usuário encontrado: {user['username']}, hash: {user['password_hash'][:20]}...")
             
-            user_dict = dict(user)
-            user_dict.pop('password_hash', None)
-            
-            # Criar tokens
-            access_token = create_access_token(identity={
-                'id': user['id'],
-                'username': user['username'],
-                'is_domain_admin': user['is_domain_admin'],
-                'is_super_admin': user['is_super_admin'],
-                'domain_id': user['domain_id'],
-                'company_id': user['company_id']
-            })
-            
-            refresh_token = create_refresh_token(identity={
-                'id': user['id'],
-                'username': user['username']
-            })
-            
-            return {
-                'access_token': access_token,
-                'refresh_token': refresh_token,
-                'user': user_dict
-            }
+            # Verificar senha
+            try:
+                # Converter bytes se necessário
+                password_hash = user['password_hash']
+                if isinstance(password_hash, str):
+                    password_hash = password_hash.encode('utf-8')
+                
+                password_check = password.encode('utf-8')
+                
+                if bcrypt.checkpw(password_check, password_hash):
+                    # Atualizar último login
+                    conn = get_db_connection()
+                    cursor = conn.cursor()
+                    cursor.execute('UPDATE users SET last_login = ? WHERE id = ?', 
+                                 (datetime.now(), user['id']))
+                    conn.commit()
+                    conn.close()
+                    
+                    user_dict = dict(user)
+                    user_dict.pop('password_hash', None)
+                    
+                    # Criar tokens
+                    access_token = create_access_token(identity={
+                        'id': user['id'],
+                        'username': user['username'],
+                        'email': user['email'],
+                        'is_domain_admin': bool(user['is_domain_admin']),
+                        'is_super_admin': bool(user['is_super_admin']),
+                        'domain_id': user['domain_id'],
+                        'company_id': user['company_id']
+                    })
+                    
+                    refresh_token = create_refresh_token(identity={
+                        'id': user['id'],
+                        'username': user['username']
+                    })
+                    
+                    return {
+                        'access_token': access_token,
+                        'refresh_token': refresh_token,
+                        'user': user_dict
+                    }
+                else:
+                    logger.warning("Senha incorreta")
+            except Exception as e:
+                logger.error(f"Erro ao verificar senha: {str(e)}")
         
+        logger.warning(f"Usuário não encontrado ou inativo: {username}")
         return None
     
     @staticmethod
@@ -111,3 +152,7 @@ class Auth:
             return True
         
         return False
+
+# Configurar logger
+import logging
+logger = logging.getLogger(__name__)
