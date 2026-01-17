@@ -4,7 +4,16 @@
 
 {% block content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-    <h1 class="h2">Dashboard</h1>
+    <h1 class="h2">
+        <i class="fas fa-tachometer-alt me-2"></i>Dashboard
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="refreshDashboard()">
+                <i class="fas fa-sync-alt"></i> Atualizar
+            </button>
+        </div>
+    </div>
 </div>
 
 <div class="row">
@@ -69,10 +78,26 @@
     <div class="col-md-8">
         <div class="card">
             <div class="card-header">
-                <h5>Atividade Recente</h5>
+                <h5><i class="fas fa-history me-2"></i>Atividade Recente</h5>
             </div>
             <div class="card-body">
-                <div id="recentActivity">Carregando...</div>
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Usuário</th>
+                                <th>Ação</th>
+                                <th>Domínio</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recentActivity">
+                            <tr>
+                                <td colspan="4" class="text-center">Carregando...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
@@ -80,88 +105,124 @@
     <div class="col-md-4">
         <div class="card">
             <div class="card-header">
-                <h5>Domínios Ativos</h5>
+                <h5><i class="fas fa-globe me-2"></i>Domínios Ativos</h5>
             </div>
             <div class="card-body">
-                <div id="activeDomains">Carregando...</div>
+                <div class="list-group" id="activeDomains">
+                    <div class="list-group-item">Carregando...</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5><i class="fas fa-user me-2"></i>Informações do Usuário</h5>
+            </div>
+            <div class="card-body">
+                <div id="userInfo">
+                    <p><strong>Nome:</strong> <span id="userFullName">Carregando...</span></p>
+                    <p><strong>Email:</strong> <span id="userEmail">Carregando...</span></p>
+                    <p><strong>Último login:</strong> <span id="userLastLogin">Carregando...</span></p>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
 <script>
-// Configurar axios para incluir token JWT
-axios.interceptors.request.use(config => {
-    const token = localStorage.getItem('access_token');
-    if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-});
-
-// Função para fazer refresh do token
-async function refreshToken() {
-    try {
-        const refreshToken = localStorage.getItem('refresh_token');
-        const response = await axios.post('/api/refresh', {}, {
-            headers: {
-                Authorization: `Bearer ${refreshToken}`
-            }
-        });
-        
-        localStorage.setItem('access_token', response.data.access_token);
-        return true;
-    } catch (error) {
-        window.location.href = '/login';
-        return false;
-    }
-}
-
-// Interceptor para tratar token expirado
-axios.interceptors.response.use(
-    response => response,
-    async error => {
-        if (error.response?.status === 401) {
-            const refreshed = await refreshToken();
-            if (refreshed) {
-                return axios(error.config);
-            }
-        }
-        return Promise.reject(error);
-    }
-);
-
 // Carregar dados do dashboard
 async function loadDashboardData() {
     try {
-        const [domainsRes, usersRes] = await Promise.all([
-            axios.get('/api/domains'),
-            axios.get('/api/users')
-        ]);
+        showLoading();
         
+        // Carregar domínios
+        const domainsRes = await axios.get('/api/domains');
         document.getElementById('domainCount').textContent = domainsRes.data.length;
+        
+        // Carregar usuários
+        const usersRes = await axios.get('/api/users');
         document.getElementById('userCount').textContent = usersRes.data.length;
+        
+        // Carregar emails de hoje
+        const today = new Date().toISOString().split('T')[0];
+        const emailsRes = await axios.get(`/api/emails?date=${today}`);
+        document.getElementById('emailCount').textContent = emailsRes.data.length || 0;
         
         // Atualizar domínios ativos
         const activeDomains = domainsRes.data.slice(0, 5);
-        document.getElementById('activeDomains').innerHTML = 
-            activeDomains.map(d => 
-                `<div class="mb-2">
-                    <i class="fas fa-globe text-primary"></i>
-                    <strong>${d.domain_name}</strong>
-                    <br><small>${d.company_name || 'Sem empresa'}</small>
-                </div>`
-            ).join('');
+        const domainsHtml = activeDomains.map(d => 
+            `<a href="#" class="list-group-item list-group-item-action">
+                <div class="d-flex w-100 justify-content-between">
+                    <h6 class="mb-1"><i class="fas fa-globe text-primary me-2"></i>${d.domain_name}</h6>
+                    <small>${d.ssl_enabled ? '<span class="badge bg-success">SSL</span>' : ''}</small>
+                </div>
+                <small>${d.company_name || 'Sem empresa'}</small>
+            </a>`
+        ).join('');
+        document.getElementById('activeDomains').innerHTML = domainsHtml;
+        
+        // Carregar informações do usuário
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        document.getElementById('userFullName').textContent = user.full_name || user.username || 'N/A';
+        document.getElementById('userEmail').textContent = user.email || 'N/A';
+        document.getElementById('userLastLogin').textContent = 
+            user.last_login ? new Date(user.last_login).toLocaleString() : 'Nunca';
             
+        // Simular atividade recente (você precisará criar esta API)
+        document.getElementById('recentActivity').innerHTML = `
+            <tr>
+                <td>${new Date().toLocaleDateString()}</td>
+                <td>${user.username}</td>
+                <td>Login no sistema</td>
+                <td>${user.domain_name || 'Sistema'}</td>
+            </tr>
+        `;
+        
+        hideLoading();
+        
     } catch (error) {
         console.error('Erro ao carregar dashboard:', error);
+        
+        if (error.response?.status === 401) {
+            alert('Sessão expirada. Faça login novamente.');
+            logout();
+        } else {
+            document.getElementById('recentActivity').innerHTML = `
+                <tr>
+                    <td colspan="4" class="text-center text-danger">
+                        Erro ao carregar dados: ${error.message}
+                    </td>
+                </tr>
+            `;
+        }
+        
+        hideLoading();
     }
 }
 
-// Carregar dados quando a página carregar
-document.addEventListener('DOMContentLoaded', loadDashboardData);
+// Adicionar API de emails
+async function addEmailsAPI() {
+    // Esta função deve ser implementada no backend
+    return [];
+}
 
-// Atualizar a cada 60 segundos
-setInterval(loadDashboardData, 60000);
+function refreshDashboard() {
+    loadDashboardData();
+}
+
+// Carregar dados quando a página carregar
+document.addEventListener('DOMContentLoaded', function() {
+    // Verificar se está autenticado
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+        window.location.href = '/login';
+        return;
+    }
+    
+    loadDashboardData();
+    
+    // Atualizar a cada 60 segundos
+    setInterval(loadDashboardData, 60000);
+});
 </script>
 {% endblock %}

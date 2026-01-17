@@ -162,26 +162,108 @@ def emails_page():
 def settings_page():
     return render_template('settings.html')
 
-@app.route('/api/debug/users', methods=['GET'])
-def debug_users():
-    """Rota de debug para ver usuários (remover em produção)"""
+@app.route('/api/emails', methods=['GET'])
+@jwt_required()
+def get_emails():
+    """Obtém emails do usuário/domínio"""
+    current_user = get_jwt_identity()
+    
+    date_filter = request.args.get('date')
+    
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    cursor.execute('SELECT id, username, email, password_hash FROM users')
-    users = cursor.fetchall()
+    query = '''
+    SELECT e.* FROM emails e
+    WHERE e.domain_id = ?
+    '''
+    params = [current_user['domain_id']]
+    
+    if date_filter:
+        query += ' AND DATE(e.received_at) = ?'
+        params.append(date_filter)
+    
+    query += ' ORDER BY e.received_at DESC LIMIT 100'
+    
+    cursor.execute(query, tuple(params))
+    emails = cursor.fetchall()
     conn.close()
     
-    result = []
-    for user in users:
-        result.append({
-            'id': user['id'],
-            'username': user['username'],
-            'email': user['email'],
-            'password_hash': str(user['password_hash'])[:50] + '...'
-        })
+    return jsonify([dict(email) for email in emails])
+
+@app.route('/api/emails/<int:email_id>', methods=['GET'])
+@jwt_required()
+def get_email(email_id):
+    """Obtém um email específico"""
+    current_user = get_jwt_identity()
     
-    return jsonify(result)
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+    SELECT e.* FROM emails e
+    WHERE e.id = ? AND e.domain_id = ?
+    ''', (email_id, current_user['domain_id']))
+    
+    email = cursor.fetchone()
+    conn.close()
+    
+    if email:
+        return jsonify(dict(email))
+    return jsonify({'error': 'Email não encontrado'}), 404
+
+@app.route('/api/stats', methods=['GET'])
+@jwt_required()
+def get_stats():
+    """Obtém estatísticas do sistema"""
+    current_user = get_jwt_identity()
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    today = datetime.now().date()
+    
+    # Contar emails de hoje
+    cursor.execute('''
+    SELECT COUNT(*) as count FROM emails 
+    WHERE domain_id = ? AND DATE(received_at) = ?
+    ''', (current_user['domain_id'], today))
+    emails_today = cursor.fetchone()['count']
+    
+    # Contar usuários ativos no domínio
+    cursor.execute('''
+    SELECT COUNT(*) as count FROM users 
+    WHERE domain_id = ? AND status = 'active'
+    ''', (current_user['domain_id'],))
+    active_users = cursor.fetchone()['count']
+    
+    # Últimos logins
+    cursor.execute('''
+    SELECT username, last_login FROM users 
+    WHERE domain_id = ? AND last_login IS NOT NULL
+    ORDER BY last_login DESC LIMIT 5
+    ''', (current_user['domain_id'],))
+    recent_logins = cursor.fetchall()
+    
+    conn.close()
+    
+    return jsonify({
+        'emails_today': emails_today,
+        'active_users': active_users,
+        'recent_logins': [dict(login) for login in recent_logins]
+    })
+
+# Rota para verificar token (útil para debug)
+@app.route('/api/verify-token', methods=['GET'])
+@jwt_required()
+def verify_token():
+    """Verifica se o token é válido"""
+    current_user = get_jwt_identity()
+    return jsonify({
+        'valid': True,
+        'user': current_user,
+        'message': 'Token válido'
+    })
 
 if __name__ == '__main__':
     app.run(debug=True, port=8080)
