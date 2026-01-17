@@ -16,14 +16,21 @@
                             <label for="domain" class="form-label">
                                 <i class="fas fa-globe"></i> Domínio
                             </label>
-                            <input type="text" class="form-control" id="domain" required>
+                            <select class="form-control" id="domain" required>
+                                <option value="">Selecione um domínio</option>
+                                <!-- Domínios serão carregados dinamicamente -->
+                            </select>
                         </div>
                         
                         <div class="mb-3">
                             <label for="username" class="form-label">
                                 <i class="fas fa-user"></i> Usuário
                             </label>
-                            <input type="text" class="form-control" id="username" required>
+                            <input type="text" class="form-control" id="username" required
+                                   placeholder="Nome de usuário (sem @domínio)">
+                            <small class="form-text text-muted">
+                                Apenas o nome de usuário. O domínio será selecionado acima.
+                            </small>
                         </div>
                         
                         <div class="mb-3">
@@ -38,9 +45,49 @@
                                 <i class="fas fa-sign-in-alt"></i> Entrar
                             </button>
                         </div>
+                        
+                        <div class="mt-3 text-center">
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle"></i>
+                                Problemas com login? <a href="#" onclick="showAlternativeLogin()">Clique aqui</a>
+                            </small>
+                        </div>
+                    </form>
+                    
+                    <!-- Formulário alternativo para debug -->
+                    <form id="alternativeLoginForm" style="display: none;" class="mt-3">
+                        <div class="mb-3">
+                            <label for="fullUsername" class="form-label">
+                                <i class="fas fa-at"></i> Usuário completo (username@domain)
+                            </label>
+                            <input type="text" class="form-control" id="fullUsername"
+                                   placeholder="usuario@dominio.com">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="password2" class="form-label">
+                                <i class="fas fa-lock"></i> Senha
+                            </label>
+                            <input type="password" class="form-control" id="password2">
+                        </div>
+                        
+                        <div class="d-grid">
+                            <button type="button" class="btn btn-outline-secondary" onclick="tryAlternativeLogin()">
+                                Tentar Login Alternativo
+                            </button>
+                        </div>
                     </form>
                     
                     <div id="errorMessage" class="alert alert-danger mt-3 d-none"></div>
+                    <div id="successMessage" class="alert alert-success mt-3 d-none"></div>
+                </div>
+            </div>
+            
+            <!-- Debug info -->
+            <div class="card mt-3" id="debugCard" style="display: none;">
+                <div class="card-body">
+                    <h6><i class="fas fa-bug"></i> Debug Info</h6>
+                    <pre id="debugInfo" class="small"></pre>
                 </div>
             </div>
         </div>
@@ -48,6 +95,62 @@
 </div>
 
 <script>
+// Verificar se localStorage está disponível
+function isLocalStorageAvailable() {
+    try {
+        const testKey = '__storage_test__';
+        localStorage.setItem(testKey, testKey);
+        localStorage.removeItem(testKey);
+        return true;
+    } catch (e) {
+        console.error('localStorage não disponível:', e);
+        return false;
+    }
+}
+
+// Função segura para salvar no localStorage
+function safeSetItem(key, value) {
+    try {
+        if (isLocalStorageAvailable()) {
+            localStorage.setItem(key, value);
+            return true;
+        }
+    } catch (e) {
+        console.error(`Erro ao salvar ${key}:`, e);
+    }
+    return false;
+}
+
+// Função segura para ler do localStorage
+function safeGetItem(key) {
+    try {
+        if (isLocalStorageAvailable()) {
+            return localStorage.getItem(key);
+        }
+    } catch (e) {
+        console.error(`Erro ao ler ${key}:`, e);
+    }
+    return null;
+}
+
+// Carregar domínios disponíveis
+async function loadDomains() {
+    try {
+        const response = await axios.get('/api/public/domains');
+        const domainSelect = document.getElementById('domain');
+        
+        response.data.forEach(domain => {
+            const option = document.createElement('option');
+            option.value = domain.domain_name;
+            option.textContent = domain.domain_name;
+            domainSelect.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Erro ao carregar domínios:', error);
+    }
+}
+
+// Formulário principal
 document.getElementById('loginForm').addEventListener('submit', async function(e) {
     e.preventDefault();
     
@@ -55,22 +158,134 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
     const username = document.getElementById('username').value;
     const password = document.getElementById('password').value;
     
+    if (!domain || !username || !password) {
+        showError('Por favor, preencha todos os campos');
+        return;
+    }
+    
+    const fullUsername = `${username}@${domain}`;
+    await attemptLogin(fullUsername, password);
+});
+
+// Login alternativo
+function showAlternativeLogin() {
+    document.getElementById('alternativeLoginForm').style.display = 'block';
+    document.getElementById('debugCard').style.display = 'block';
+}
+
+async function tryAlternativeLogin() {
+    const fullUsername = document.getElementById('fullUsername').value;
+    const password = document.getElementById('password2').value;
+    
+    if (!fullUsername || !password) {
+        showError('Por favor, preencha todos os campos');
+        return;
+    }
+    
+    await attemptLogin(fullUsername, password);
+}
+
+// Função principal de login
+async function attemptLogin(username, password) {
+    showError('');
+    showSuccess('');
+    
     try {
         const response = await axios.post('/api/login', {
-            username: username + '@' + domain,
+            username: username,
             password: password
         });
         
-        localStorage.setItem('access_token', response.data.access_token);
-        localStorage.setItem('refresh_token', response.data.refresh_token);
-        localStorage.setItem('user', JSON.stringify(response.data.user));
+        // Tentar salvar tokens
+        const tokensSaved = 
+            safeSetItem('access_token', response.data.access_token) &&
+            safeSetItem('refresh_token', response.data.refresh_token) &&
+            safeSetItem('user', JSON.stringify(response.data.user));
         
-        window.location.href = '/dashboard';
+        if (tokensSaved) {
+            showSuccess('Login realizado com sucesso! Redirecionando...');
+            
+            // Mostrar debug info
+            document.getElementById('debugInfo').textContent = JSON.stringify({
+                token_saved: true,
+                token_prefix: response.data.access_token.substring(0, 20) + '...',
+                user: response.data.user.username
+            }, null, 2);
+            
+            // Redirecionar após 1 segundo
+            setTimeout(() => {
+                window.location.href = '/dashboard';
+            }, 1000);
+        } else {
+            // Fallback: usar sessionStorage ou cookies
+            showError('localStorage não disponível. Tentando método alternativo...');
+            await fallbackAuth(response.data);
+        }
+        
     } catch (error) {
-        document.getElementById('errorMessage').textContent = 
-            error.response?.data?.error || 'Erro ao fazer login';
-        document.getElementById('errorMessage').classList.remove('d-none');
+        console.error('Erro no login:', error);
+        
+        let errorMsg = 'Erro ao fazer login';
+        if (error.response?.data?.error) {
+            errorMsg = error.response.data.error;
+        } else if (error.message) {
+            errorMsg = error.message;
+        }
+        
+        showError(errorMsg);
+        
+        // Mostrar debug info
+        document.getElementById('debugInfo').textContent = JSON.stringify({
+            error: errorMsg,
+            status: error.response?.status,
+            response: error.response?.data
+        }, null, 2);
     }
+}
+
+// Fallback para quando localStorage não está disponível
+async function fallbackAuth(authData) {
+    try {
+        // Usar sessionStorage como fallback
+        sessionStorage.setItem('access_token', authData.access_token);
+        sessionStorage.setItem('refresh_token', authData.refresh_token);
+        sessionStorage.setItem('user', JSON.stringify(authData.user));
+        
+        showSuccess('Login realizado (usando sessionStorage). Redirecionando...');
+        
+        setTimeout(() => {
+            window.location.href = '/dashboard';
+        }, 1000);
+        
+    } catch (e) {
+        console.error('Fallback também falhou:', e);
+        showError('Não foi possível salvar as credenciais. Verifique as configurações do navegador.');
+    }
+}
+
+function showError(message) {
+    const el = document.getElementById('errorMessage');
+    el.textContent = message;
+    message ? el.classList.remove('d-none') : el.classList.add('d-none');
+}
+
+function showSuccess(message) {
+    const el = document.getElementById('successMessage');
+    el.textContent = message;
+    message ? el.classList.remove('d-none') : el.classList.add('d-none');
+}
+
+// Verificar localStorage ao carregar
+document.addEventListener('DOMContentLoaded', function() {
+    const isStorageAvailable = isLocalStorageAvailable();
+    console.log('localStorage disponível:', isStorageAvailable);
+    
+    if (!isStorageAvailable) {
+        showError('Aviso: localStorage não está disponível. Algumas funcionalidades podem não funcionar.');
+    }
+    
+    // Carregar domínios
+    loadDomains();
 });
 </script>
 {% endblock %}

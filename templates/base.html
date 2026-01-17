@@ -107,99 +107,195 @@
         {% block login_content %}{% endblock %}
     {% endif %}
     
+    <!-- No final do base.html, substitua todo o script por este: -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <script>
-        // Configuração global do Axios
-        axios.defaults.baseURL = window.location.origin;
-        
-        // Interceptor para adicionar token
-        axios.interceptors.request.use(config => {
-            const token = localStorage.getItem('access_token');
-            if (token) {
-                config.headers.Authorization = `Bearer ${token}`;
-            }
-            return config;
-        }, error => {
-            return Promise.reject(error);
-        });
-        
-        // Interceptor para tratar respostas 401
-        axios.interceptors.response.use(
-            response => response,
-            async error => {
-                const originalRequest = error.config;
-                
-                if (error.response?.status === 401 && !originalRequest._retry) {
-                    originalRequest._retry = true;
-                    
-                    try {
-                        const refreshToken = localStorage.getItem('refresh_token');
-                        if (!refreshToken) {
-                            throw new Error('No refresh token');
-                        }
-                        
-                        const response = await axios.post('/api/refresh', {}, {
-                            headers: {
-                                Authorization: `Bearer ${refreshToken}`
-                            }
-                        });
-                        
-                        localStorage.setItem('access_token', response.data.access_token);
-                        
-                        // Retry a requisição original
-                        originalRequest.headers.Authorization = `Bearer ${response.data.access_token}`;
-                        return axios(originalRequest);
-                    } catch (refreshError) {
-                        console.error('Refresh token failed:', refreshError);
-                        logout();
-                        return Promise.reject(refreshError);
-                    }
-                }
-                
-                return Promise.reject(error);
-            }
-        );
-        
-        // Funções de navegação
-        function navigateTo(url) {
-            window.location.href = url;
-        }
-        
-        function logout() {
-            localStorage.removeItem('access_token');
-            localStorage.removeItem('refresh_token');
-            localStorage.removeItem('user');
-            window.location.href = '/login';
-        }
-        
-        function showLoading() {
-            document.getElementById('loading').style.display = 'flex';
-        }
-        
-        function hideLoading() {
-            document.getElementById('loading').style.display = 'none';
-        }
-        
-        // Verificar autenticação ao carregar página
-        document.addEventListener('DOMContentLoaded', function() {
-            const token = localStorage.getItem('access_token');
-            const user = localStorage.getItem('user');
-            
-            if (!token && window.location.pathname !== '/login') {
-                window.location.href = '/login';
-                return;
-            }
-            
-            if (token && user) {
+    // Sistema de armazenamento unificado
+    const AuthStorage = {
+        // Tentar localStorage primeiro, depois sessionStorage
+        setItem(key, value) {
+            try {
+                localStorage.setItem(key, value);
+                return true;
+            } catch (e) {
+                console.warn(`localStorage falhou para ${key}, tentando sessionStorage:`, e);
                 try {
-                    const userData = JSON.parse(user);
-                    console.log('Usuário logado:', userData.username);
-                } catch (e) {
-                    console.error('Erro ao parsear user:', e);
+                    sessionStorage.setItem(key, value);
+                    return true;
+                } catch (e2) {
+                    console.error(`sessionStorage também falhou para ${key}:`, e2);
+                    return false;
                 }
             }
+        },
+        
+        getItem(key) {
+            let value = localStorage.getItem(key);
+            if (value === null) {
+                value = sessionStorage.getItem(key);
+            }
+            return value;
+        },
+        
+        removeItem(key) {
+            localStorage.removeItem(key);
+            sessionStorage.removeItem(key);
+        },
+        
+        clear() {
+            localStorage.clear();
+            sessionStorage.clear();
+        }
+    };
+
+    // Configuração do Axios
+    axios.defaults.baseURL = window.location.origin;
+
+    // Interceptor para adicionar token
+    axios.interceptors.request.use(config => {
+        const token = AuthStorage.getItem('access_token');
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+            console.log('Token adicionado à requisição:', config.url);
+        } else {
+            console.warn('Nenhum token encontrado para:', config.url);
+        }
+        return config;
+    }, error => {
+        console.error('Erro no interceptor de request:', error);
+        return Promise.reject(error);
+    });
+
+    // Interceptor para tratar respostas
+    axios.interceptors.response.use(
+        response => {
+            return response;
+        },
+        async error => {
+            const originalRequest = error.config;
+            
+            console.log('Erro na resposta:', error.response?.status, error.config.url);
+            
+            // Token expirado
+            if (error.response?.status === 401 && !originalRequest._retry) {
+                originalRequest._retry = true;
+                
+                try {
+                    const refreshToken = AuthStorage.getItem('refresh_token');
+                    if (!refreshToken) {
+                        throw new Error('No refresh token available');
+                    }
+                    
+                    console.log('Tentando refresh token...');
+                    const response = await axios.post('/api/refresh', {}, {
+                        headers: {
+                            Authorization: `Bearer ${refreshToken}`
+                        }
+                    });
+                    
+                    // Salvar novo token
+                    AuthStorage.setItem('access_token', response.data.access_token);
+                    
+                    // Retry a requisição original
+                    originalRequest.headers.Authorization = `Bearer ${response.data.access_token}`;
+                    return axios(originalRequest);
+                    
+                } catch (refreshError) {
+                    console.error('Refresh token falhou:', refreshError);
+                    logout();
+                }
+            }
+            
+            return Promise.reject(error);
+        }
+    );
+
+    // Funções de navegação
+    function navigateTo(url) {
+        window.location.href = url;
+    }
+
+    function logout() {
+        AuthStorage.clear();
+        window.location.href = '/login';
+    }
+
+    function showLoading() {
+        const loadingEl = document.getElementById('loading');
+        if (loadingEl) loadingEl.style.display = 'flex';
+    }
+
+    function hideLoading() {
+        const loadingEl = document.getElementById('loading');
+        if (loadingEl) loadingEl.style.display = 'none';
+    }
+
+    // Verificar autenticação
+    function checkAuth() {
+        const token = AuthStorage.getItem('access_token');
+        const user = AuthStorage.getItem('user');
+        const currentPath = window.location.pathname;
+        
+        console.log('Verificando autenticação:', {
+            hasToken: !!token,
+            hasUser: !!user,
+            currentPath: currentPath
         });
+        
+        // Se não está na página de login e não tem token, redirecionar
+        if (!token && currentPath !== '/login') {
+            console.log('Não autenticado, redirecionando para login');
+            window.location.href = '/login';
+            return false;
+        }
+        
+        // Se tem token e está na página de login, redirecionar para dashboard
+        if (token && currentPath === '/login') {
+            console.log('Já autenticado, redirecionando para dashboard');
+            window.location.href = '/dashboard';
+            return false;
+        }
+        
+        return !!token;
+    }
+
+    // Ao carregar a página
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('Página carregada, verificando autenticação...');
+        
+        // Verificar autenticação
+        const isAuthenticated = checkAuth();
+        
+        if (isAuthenticated) {
+            console.log('Usuário autenticado');
+            
+            // Testar token se não for página de login
+            if (window.location.pathname !== '/login') {
+                testToken();
+            }
+        }
+    });
+
+    // Testar token
+    async function testToken() {
+        try {
+            const response = await axios.get('/api/verify-token');
+            console.log('Token válido:', response.data);
+        } catch (error) {
+            console.error('Token inválido:', error);
+            if (error.response?.status === 401) {
+                logout();
+            }
+        }
+    }
+
+    // Expor funções globalmente para uso nos templates
+    window.navigateTo = navigateTo;
+    window.logout = logout;
+    window.showLoading = showLoading;
+    window.hideLoading = hideLoading;
+    window.AuthStorage = AuthStorage;
     </script>
     {% block scripts %}{% endblock %}
 </body>
