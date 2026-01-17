@@ -40,31 +40,23 @@
                         <div class="mb-3">
                             <label for="dominio" class="form-label">Domínio da Empresa</label>
                             <input type="text" class="form-control" id="dominio" 
-                                   placeholder="ex: empresa.com (deixe vazio para admin)">
+                                   placeholder="ex: domain.com">
                             <small class="text-muted">Para admin master, deixe em branco</small>
                         </div>
                         
                         <div class="mb-3">
                             <label for="username" class="form-label">Usuário</label>
-                            <input type="text" class="form-control" id="username" 
-                                   placeholder="Digite seu usuário" required>
+                            <input type="text" class="form-control" id="username" placeholder="Digite seu usuário" required>
                         </div>
                         
                         <div class="mb-4">
                             <label for="senha" class="form-label">Senha</label>
-                            <input type="password" class="form-control" id="senha" 
-                                   placeholder="Digite sua senha" required>
+                            <input type="password" class="form-control" id="senha" placeholder="Digite sua senha" required>
                         </div>
                         
                         <button type="submit" class="btn btn-primary w-100 mb-3">
                             Entrar
                         </button>
-                        
-                        <div class="text-center">
-                            <small class="text-muted">
-                                Admin master: usuário: <strong>admin</strong>, senha: <strong>admin</strong>
-                            </small>
-                        </div>
                     </form>
                     
                     <div id="loginError" class="alert alert-danger mt-3 d-none"></div>
@@ -84,14 +76,8 @@
             try {
                 const response = await fetch('/api/auth/login', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        dominio: dominio || 'admin',
-                        username,
-                        senha
-                    })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ dominio: dominio || 'admin', username, senha })
                 });
                 
                 const data = await response.json();
